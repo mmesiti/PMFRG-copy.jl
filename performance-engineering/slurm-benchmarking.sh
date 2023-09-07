@@ -4,8 +4,6 @@
 #SBATCH --time 25
 #SBATCH --nodes 1
 #SBATCH --exclusive
-#SBATCH --dependency singleton
-#SBATCH --job-name pmfrg-benchmark
 
 set -o nounset
 module use "$HOME/modules"
@@ -23,7 +21,7 @@ exit
 =#
 
 import Pkg
-ROOT = "/home/hk-project-scs/hs2454/PMFRG/"
+ROOT = "/home/hkt-project-scs/hs2454/PMFRG/"
 Pkg.activate(ROOT * "TestProject" )
 # Printing all dependencies in job log.
 deps = Pkg.dependencies()
