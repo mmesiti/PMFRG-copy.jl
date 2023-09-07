@@ -161,7 +161,7 @@ function launchPMFRG!(
     asm_file_name = "run-$(ENV["SLURM_JOB_ID"])-$(ENV["SLURM_NODELIST"]).asm"
     asm_file = open(asm_file_name, "w")
     println("Saving code_native in $asm_file_name...")
-    InteractiveUtils.code_native(io=asm_file, f= Deriv_subst!, types=(typeof(State), typeof(State), typeof(setup), typeof(t0)))
+    InteractiveUtils.code_native(asm_file, Deriv_subst!, (typeof(State), typeof(State), typeof(setup), typeof(t0)))
     close(asm_file)
     problem = ODEProblem(Deriv_subst!, State, (t0, tend), setup)
     #Solve ODE. default arguments may be added to, or overwritten by specifying kwargs
