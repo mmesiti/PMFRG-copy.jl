@@ -72,18 +72,9 @@ rm(tempdir, recursive=true, force=true)
 mainFile = "$tempdir/" * PMFRG.generateFileName(Par, "_testFile") # specify a file name for main Output
 flowpath = "$tempdir/flows/" # specify path for vertex checkpoints
 
-@time Solution, saved_values = SolveFRG(
-    Par,
-    MainFile=mainFile,
-    CheckpointDirectory=flowpath,
-    method=DP5(),
-    VertexCheckpoints=[],
-    CheckPointSteps=3,
-);
-
 println("Marker init")
 Marker.init()
-@time Solution, saved_values = SolveFRG(
+@marker "SolveFRG" SolveFRG(
     Par,
     MainFile=mainFile,
     CheckpointDirectory=flowpath,
