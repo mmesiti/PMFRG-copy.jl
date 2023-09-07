@@ -1,5 +1,6 @@
 using SpinFRGLattices, PMFRG
 using SpinFRGLattices.SquareLattice
+using LIKWID
 
 
 # Number of nearest neighbor bonds 
@@ -79,5 +80,20 @@ flowpath = "$tempdir/flows/" # specify path for vertex checkpoints
     VertexCheckpoints=[],
     CheckPointSteps=3,
 );
+
+println("Marker init")
+Marker.init()
+@time Solution, saved_values = SolveFRG(
+    Par,
+    MainFile=mainFile,
+    CheckpointDirectory=flowpath,
+    method=DP5(),
+    VertexCheckpoints=[],
+    CheckPointSteps=3,
+);
+
+
+Marker.close()
+println("Marker close")
 
 println("Done")

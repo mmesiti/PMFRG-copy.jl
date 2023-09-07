@@ -9,8 +9,10 @@ using SpinFRGLattices,
     HDF5,
     H5Zblosc
 
+
 using SpinFRGLattices.StaticArrays
 import InteractiveUtils
+using LIKWID
 
 export SolveFRG, Params, OneLoopParams, BS3, Vern7, DP5, version, getChi, OneLoop
 version() = """v.2.1.8"""

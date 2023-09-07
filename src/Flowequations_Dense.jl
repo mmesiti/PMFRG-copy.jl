@@ -141,7 +141,7 @@ function getXBubble!(Workspace::PMFRGWorkspace, Lam)
 						end
 						addXTilde!(Workspace,is,it,iu,nw,sprop) # add to XTilde-type bubble functions
 						if(!Par.Options.usesymmetry || nu<=nt)
-							addX!(Workspace,is,it,iu,nw,sprop,Buffer)# add to X-type bubble functions
+							@marker "addX!" addX!(Workspace,is,it,iu,nw,sprop,Buffer)# add to X-type bubble functions
 						end
 					end
 				end
