@@ -74,7 +74,12 @@ flowpath = "$tempdir/flows/" # specify path for vertex checkpoints
 
 println("Marker init")
 Marker.init()
-@marker "SolveFRG" SolveFRG(
+
+Thread.@spawn begin 
+Marker.startregion("solveFRG")
+end
+
+SolveFRG(
     Par,
     MainFile=mainFile,
     CheckpointDirectory=flowpath,
@@ -83,6 +88,9 @@ Marker.init()
     CheckPointSteps=3,
 );
 
+Thread.@spawn begin 
+Marker.stopregion("solveFRG")
+end
 
 Marker.close()
 println("Marker close")
