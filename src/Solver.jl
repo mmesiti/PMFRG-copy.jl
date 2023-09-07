@@ -157,6 +157,12 @@ function launchPMFRG!(
     t0 = Lam_to_t(Lam_max)
     tend = get_t_min(Lam_min)
     Deriv_subst! = generateSubstituteDeriv(Deriv!)
+    # Saving assembler code for Deriv_subst!
+    asm_file_name = "run-$(ENV["SLURM_JOB_ID"])-$(ENV["SLURM_NODELIST"]).asm"
+    asm_file = open(asm_file_name, "w")
+    println("Saving code_native in $asm_file_name...")
+    InteractiveUtils.code_native(io=asm_file, f= Deriv_subst!, types=(typeof(State), typeof(State), typeof(setup), typeof(t0)))
+    close(asm_file)
     problem = ODEProblem(Deriv_subst!, State, (t0, tend), setup)
     #Solve ODE. default arguments may be added to, or overwritten by specifying kwargs
     println("Starting solve")
