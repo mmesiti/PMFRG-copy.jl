@@ -122,17 +122,17 @@ function generate_compute_intensive(Npairs, Nsum, siteSum)
             m = S_m[k_spl, Rij]
             xk = S_xk[k_spl, Rij]
 
-            push!(fbody, :(Ptm = Props[$xk, $xk] * $m))
+            push!(fbody, :(@inbounds Ptm = Props[$xk, $xk] * $m))
 
-            push!(fbody, :(Xa_sum += (+Va12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj] * 2) * Ptm))
+            push!(fbody, :(@inbounds Xa_sum += (+Va12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj] * 2) * Ptm))
 
-            push!(fbody, :(Xb_sum += (+Va12[$ki] * Vb34[$kj] + Vb12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj]) * Ptm))
+            push!(fbody, :(@inbounds Xb_sum += (+Va12[$ki] * Vb34[$kj] + Vb12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj]) * Ptm))
 
-            push!(fbody, :(Xc_sum += (+Vc12[$ki] * Vc34[$kj] + Vc21[$ki] * Vc43[$kj]) * Ptm))
+            push!(fbody, :(@inbounds Xc_sum += (+Vc12[$ki] * Vc34[$kj] + Vc21[$ki] * Vc43[$kj]) * Ptm))
         end
-        push!(fbody, :(a[$Rij, is, it, iu] += Xa_sum))
-        push!(fbody, :(b[$Rij, is, it, iu] += Xb_sum))
-        push!(fbody, :(c[$Rij, is, it, iu] += Xc_sum))
+        push!(fbody, :(@inbounds a[$Rij, is, it, iu] += Xa_sum))
+        push!(fbody, :(@inbounds b[$Rij, is, it, iu] += Xb_sum))
+        push!(fbody, :(@inbounds c[$Rij, is, it, iu] += Xc_sum))
     end
 
     file = open("compute-intensive.jl", "w")
