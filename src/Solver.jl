@@ -10,7 +10,7 @@ function InitializeState(Par::PMFRGParams)
     floattype = _getFloatType(Par)
 
     State = ArrayPartition( #Allocate Memory:
-        zeros(floattype, NUnique), # f_int 
+        zeros(floattype, NUnique), # f_int
         zeros(floattype, NUnique, Ngamma), # gamma
         zeros(floattype, VDims), #Va
         zeros(floattype, VDims), #Vb
@@ -60,15 +60,15 @@ Allowed keyword arguments (with default values):
                                                     # Defaults to 'nothing', in which case no output file is produced.
     Group = DefaultGroup(Par),               # Specifies the name of the subgroup of the main files HDF5 group to which the output data is written. Defaults to temperature
                                                     # Defaults to the value of temperature to allow temperature sweeps to be written to the same file.
-    CheckpointDirectory = nothing,                  # Directory in which the current ODE state is written in regular intervals during the integration. 
+    CheckpointDirectory = nothing,                  # Directory in which the current ODE state is written in regular intervals during the integration.
                                                     # Default 'nothing' will not produce any backup!
-    method = DP5(),                                 # ODE integration method. Standard is set to OrdinaryDiffEq.DP5(). 
+    method = DP5(),                                 # ODE integration method. Standard is set to OrdinaryDiffEq.DP5().
                                                     # See OrdinaryDiffEq package for further options.
     MaxVal = Inf                                    # Terminates the ODE solution, when any absolute value of the Solution reaches MaxVal.
     ObsSaveat = nothing,                            # Specifies a vector of Λ values at which Observables are computed.
-    VertexCheckpoints = [],                         # Specifies a vector of Λ values at which vertices shall be saved permanently without being overwritten. 
+    VertexCheckpoints = [],                         # Specifies a vector of Λ values at which vertices shall be saved permanently without being overwritten.
                                                     # Empty means only the current state will be saved. Requires CheckpointDir ≠ nothing !
-    overwrite_Checkpoints = false::Bool,            # Specifies whether CheckpointDirectory is to be overwritten if it exists. 
+    overwrite_Checkpoints = false::Bool,            # Specifies whether CheckpointDirectory is to be overwritten if it exists.
                                                     # Defaults to false, in which case an unused name is generated.
     CheckPointSteps = 1,                            # Number of skipped steps before Checkpoint data is saved to reduce time spent on IO operations.
     kwargs...                                       # Additional keyword arguments are passed to OrdinaryDiffEq.solve.
@@ -78,30 +78,98 @@ Allowed keyword arguments (with default values):
 SolveFRG(Par; kwargs...) =
     launchPMFRG!(InitializeState(Par), AllocateSetup(Par), getDeriv!; kwargs...)
 
+"Generates programmatically the compute-intensive code from a lattice specification"
+function generate_compute_intensive(Npairs, Nsum, siteSum)
+    S_ki = siteSum.ki
+    S_kj = siteSum.kj
+    S_xk = siteSum.xk
+    S_m = siteSum.m
+
+    exp = quote
+        function compute_intensive(a::Array{T,4},
+            b::Array{T,4},
+            c::Array{T,4},
+            Va12::Vector{T},
+            Vb12::Vector{T},
+            Vc12::Vector{T},
+            Va34::Vector{T},
+            Vb34::Vector{T},
+            Vc34::Vector{T},
+            Vc21::Vector{T},
+            Vc43::Vector{T},
+            Props,
+            is::Integer,
+            it::Integer,
+            iu::Integer) where {T}
+        end
+    end
+    # Some ugly expr-fu t
+    # o get to the list of expressions
+    # inside "compute_intensive"
+    func = exp.args[2]
+    fbody = func.args[2].args
+
+    for Rij = 1:Npairs
+        #loop over all left hand side inequivalent pairs Rij
+
+        push!(fbody, :(Xa_sum = 0.0))
+        push!(fbody, :(Xb_sum = 0.0))
+        push!(fbody, :(Xc_sum = 0.0))
+        for k_spl = 1:Nsum[Rij]
+            #loop over all Nsum summation elements defined in geometry. This inner loop is responsible for most of the computational effort!
+            ki = S_ki[k_spl, Rij]
+            kj = S_kj[k_spl, Rij]
+            m = S_m[k_spl, Rij]
+            xk = S_xk[k_spl, Rij]
+
+            push!(fbody, :(Ptm = Props[$xk, $xk] * $m))
+
+            push!(fbody, :(Xa_sum += (+Va12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj] * 2) * Ptm))
+
+            push!(fbody, :(Xb_sum += (+Va12[$ki] * Vb34[$kj] + Vb12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj]) * Ptm))
+
+            push!(fbody, :(Xc_sum += (+Vc12[$ki] * Vc34[$kj] + Vc21[$ki] * Vc43[$kj]) * Ptm))
+        end
+        push!(fbody, :(a[$Rij, is, it, iu] += Xa_sum))
+        push!(fbody, :(b[$Rij, is, it, iu] += Xb_sum))
+        push!(fbody, :(c[$Rij, is, it, iu] += Xc_sum))
+    end
+
+    file = open("compute-intensive.jl", "w")
+    print(file, exp)
+    close(file)
+    return exp
+end
+
 function launchPMFRG!(
     State,
     setup,
     Deriv!::Function;
-    MainFile = nothing,
-    Group = DefaultGroup(setup[end]),
-    CheckpointDirectory = nothing,
-    method = DP5(),
-    MaxVal = Inf,
-    ObsSaveat = nothing,
-    VertexCheckpoints = [],
-    overwrite_Checkpoints = false::Bool,
-    CheckPointSteps = 1,
-    ObservableType = Observables,
-    kwargs...,
+    MainFile=nothing,
+    Group=DefaultGroup(setup[end]),
+    CheckpointDirectory=nothing,
+    method=DP5(),
+    MaxVal=Inf,
+    ObsSaveat=nothing,
+    VertexCheckpoints=[],
+    overwrite_Checkpoints=false::Bool,
+    CheckPointSteps=1,
+    ObservableType=Observables,
+    kwargs...
 )
 
     Par = setup[end]
     Npairs = Par.System.Npairs
+    println("DEBUG: Generating Compute Intensive function...")
+    compute_intensive = eval(generate_compute_intensive(Par.System.Npairs,
+        Par.System.Nsum,
+        Par.System.siteSum))
+
     tag = "tag:$Npairs"
 
     typeof(CheckpointDirectory) == String && (
         CheckpointDirectory =
-            setupDirectory(CheckpointDirectory, Par, overwrite = overwrite_Checkpoints)
+            setupDirectory(CheckpointDirectory, Par, overwrite=overwrite_Checkpoints)
     )
 
     (; Lam_max, Lam_min, accuracy) = Par.NumericalParams
@@ -147,29 +215,29 @@ function launchPMFRG!(
     saveCB = SavingCallback(
         save_func,
         saved_values,
-        save_everystep = false,
-        saveat = ObsSaveat,
-        tdir = -1,
+        save_everystep=false,
+        saveat=ObsSaveat,
+        tdir=-1,
     )
-    outputCB = FunctionCallingCallback(output_func, tdir = -1, func_start = false)
+    outputCB = FunctionCallingCallback(output_func, tdir=-1, func_start=false)
     unstable_check(dt, u, p, t) = @time "unstable_check $tag" maximum(abs, u) > MaxVal # returns true -> Interrupts ODE integration if vertex gets too big
 
     t0 = Lam_to_t(Lam_max)
     tend = get_t_min(Lam_min)
-    Deriv_subst! = generateSubstituteDeriv(Deriv!)
+    Deriv_subst! = generateSubstituteDeriv(Deriv!, compute_intensive)
     problem = ODEProblem(Deriv_subst!, State, (t0, tend), setup)
     #Solve ODE. default arguments may be added to, or overwritten by specifying kwargs
     println("Starting solve")
     @time sol = solve(
         problem,
         method,
-        reltol = accuracy,
-        abstol = accuracy,
-        save_everystep = false,
-        callback = CallbackSet(saveCB, outputCB),
-        dt = Lam_to_t(0.2 * Lam_max),
-        unstable_check = unstable_check;
-        kwargs...,
+        reltol=accuracy,
+        abstol=accuracy,
+        save_everystep=false,
+        callback=CallbackSet(saveCB, outputCB),
+        dt=Lam_to_t(0.2 * Lam_max),
+        unstable_check=unstable_check;
+        kwargs...
     )
     if !Par.Options.MinimalOutput
         println(sol.destats)
@@ -182,11 +250,12 @@ function launchPMFRG!(
     return sol, saved_values
 end
 
-function generateSubstituteDeriv(getDeriv!::Function)
+function generateSubstituteDeriv(getDeriv!::Function, compute_intensive)
 
+    println("DEBUG: Passing compute intensive")
     function DerivSubs!(Deriv, State, par, t)
         Lam = t_to_Lam(t)
-        a = getDeriv!(Deriv, State, par, Lam)
+        a = getDeriv!(Deriv, State, par, Lam, compute_intensive)
         Deriv .*= Lam
         a
     end
@@ -204,9 +273,9 @@ DefaultGroup(Par::PMFRGParams) = strd(Par.NumericalParams.T)
 function getObservables(::Type{Observables}, State::ArrayPartition, Lam, Par)
     f_int, gamma, Va, Vb, Vc = State.x
     chi = getChi(State, Lam, Par)
-    MaxVa = maximum(abs, Va, dims = (2, 3, 4, 5))[:, 1, 1, 1]
-    MaxVb = maximum(abs, Vb, dims = (2, 3, 4, 5))[:, 1, 1, 1]
-    MaxVc = maximum(abs, Vc, dims = (2, 3, 4, 5))[:, 1, 1, 1]
+    MaxVa = maximum(abs, Va, dims=(2, 3, 4, 5))[:, 1, 1, 1]
+    MaxVb = maximum(abs, Vb, dims=(2, 3, 4, 5))[:, 1, 1, 1]
+    MaxVc = maximum(abs, Vc, dims=(2, 3, 4, 5))[:, 1, 1, 1]
     return Observables(chi, copy(gamma), copy(f_int), MaxVa, MaxVb, MaxVc) # make sure to allocate new memory each time this function is called
 end
 

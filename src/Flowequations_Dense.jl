@@ -1,4 +1,8 @@
-function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam) where {T}
+using Recorder
+
+function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam, compute_intensive) where {T}
+
+    println("Calling getDeriv! DEBUG: with compute_intensive ")
 
     println("Calling getDeriv!")
     println("Size of Deriv: $(Base.summarysize(Deriv))")
@@ -16,7 +20,11 @@ function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam) 
     @time "getDFint! $tag" getDFint!(Workspace, Lam)
     @time "get_Self_Energy! $tag" get_Self_Energy!(Workspace, Lam)
 
-    @time "getXBubble! $tag" getXBubble!(Workspace, Lam)
+    println("pre sumA:", sum(Workspace.X.a))
+    @time "getXBubble! $tag" getXBubble!(Workspace, Lam,compute_intensive)
+    #@time "getXBubble! $tag" @record 13:2:17 getXBubble!(Workspace, Lam, compute_intensive)
+
+    println("post sumA:", sum(Workspace.X.a))
 
     @time "symmetrizeBubble! $tag" symmetrizeBubble!(Workspace.X, Par)
 
@@ -110,7 +118,8 @@ function get_Self_Energy!(Workspace::PMFRGWorkspace, Lam)
 end
 # @inline getXBubble!(Workspace::PMFRGWorkspace,Lam) = getXBubble!(Workspace,Lam,Val(Workspace.Par.System.NUnique)) 
 
-function getXBubble!(Workspace::PMFRGWorkspace, Lam)
+function getXBubble!(Workspace::PMFRGWorkspace, Lam, compute_intensive)
+    println("DEBUG: getXBubble! with compute_intensive")
     Par = Workspace.Par
     (; T, N, lenIntw, np_vec) = Par.NumericalParams
     PropsBuffers = Workspace.Buffer.Props
@@ -141,7 +150,7 @@ function getXBubble!(Workspace::PMFRGWorkspace, Lam)
 						end
 						addXTilde!(Workspace,is,it,iu,nw,sprop) # add to XTilde-type bubble functions
 						if(!Par.Options.usesymmetry || nu<=nt)
-							addX!(Workspace,is,it,iu,nw,sprop,Buffer)# add to X-type bubble functions
+							addX!(Workspace,is,it,iu,nw,sprop,Buffer,compute_intensive)# add to X-type bubble functions
 						end
 					end
 				end
@@ -176,6 +185,7 @@ function addX!(
     nwpr::Integer,
     Props,
     Buffer,
+    compute_intensive,
 )
     (; State, X, Par) = Workspace
     (; Va12, Vb12, Vc12, Va34, Vb34, Vc34, Vc21, Vc43) = Buffer
@@ -198,33 +208,35 @@ function addX!(
     bufferV_!(Vc21, State.Γ.c, ns, wpw2, wpw1, invpairs, N)
     bufferV_!(Vc43, State.Γ.c, ns, wmw4, wmw3, invpairs, N)
     # get fields of siteSum struct as Matrices for better use of LoopVectorization
-    S_ki = siteSum.ki
-    S_kj = siteSum.kj
-    S_xk = siteSum.xk
-    S_m = siteSum.m
 
-    for Rij = 1:Npairs
-        #loop over all left hand side inequivalent pairs Rij
-        Xa_sum = 0.0 #Perform summation on this temp variable before writing to State array as Base.setindex! proved to be a bottleneck!
-        Xb_sum = 0.0
-        Xc_sum = 0.0
-        @turbo unroll = 1 for k_spl = 1:Nsum[Rij]
-            #loop over all Nsum summation elements defined in geometry. This inner loop is responsible for most of the computational effort! 
-            ki, kj, m, xk =
-                S_ki[k_spl, Rij], S_kj[k_spl, Rij], S_m[k_spl, Rij], S_xk[k_spl, Rij]
-            Ptm = Props[xk, xk] * m
+    @inline compute_intensive(X.a,X.b,X.c, Va12, Vb12, Vc12, Va34, Vb34, Vc34, Vc21, Vc43, Props, is, it, iu)
+    #S_ki = siteSum.ki
+    #S_kj = siteSum.kj
+    #S_xk = siteSum.xk
+    #S_m = siteSum.m
 
-            Xa_sum += (+Va12[ki] * Va34[kj] + Vb12[ki] * Vb34[kj] * 2) * Ptm
+    #for Rij = 1:Npairs
+    #    #loop over all left hand side inequivalent pairs Rij
+    #    Xa_sum = 0.0 #Perform summation on this temp variable before writing to State array as Base.setindex! proved to be a bottleneck!
+    #    Xb_sum = 0.0
+    #    Xc_sum = 0.0
+    #    @turbo unroll = 1 for k_spl = 1:Nsum[Rij]
+    #        #loop over all Nsum summation elements defined in geometry. This inner loop is responsible for most of the computational effort! 
+    #        ki, kj, m, xk =
+    #            S_ki[k_spl, Rij], S_kj[k_spl, Rij], S_m[k_spl, Rij], S_xk[k_spl, Rij]
+    #        Ptm = Props[xk, xk] * m
 
-            Xb_sum +=
-                (+Va12[ki] * Vb34[kj] + Vb12[ki] * Va34[kj] + Vb12[ki] * Vb34[kj]) * Ptm
+    #        Xa_sum += (+Va12[ki] * Va34[kj] + Vb12[ki] * Vb34[kj] * 2) * Ptm
 
-            Xc_sum += (+Vc12[ki] * Vc34[kj] + Vc21[ki] * Vc43[kj]) * Ptm
-        end
-        X.a[Rij, is, it, iu] += Xa_sum
-        X.b[Rij, is, it, iu] += Xb_sum
-        X.c[Rij, is, it, iu] += Xc_sum
-    end
+    #        Xb_sum +=
+    #            (+Va12[ki] * Vb34[kj] + Vb12[ki] * Va34[kj] + Vb12[ki] * Vb34[kj]) * Ptm
+
+    #        Xc_sum += (+Vc12[ki] * Vc34[kj] + Vc21[ki] * Vc43[kj]) * Ptm
+    #    end
+    #    X.a[Rij, is, it, iu] += Xa_sum
+    #    X.b[Rij, is, it, iu] += Xb_sum
+    #    X.c[Rij, is, it, iu] += Xc_sum
+    #end
     return
 end
 ##
