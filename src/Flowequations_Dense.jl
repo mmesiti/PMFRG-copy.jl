@@ -1,4 +1,3 @@
-using Recorder
 
 function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam, compute_intensive) where {T}
 
@@ -20,11 +19,7 @@ function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam, 
     @time "getDFint! $tag" getDFint!(Workspace, Lam)
     @time "get_Self_Energy! $tag" get_Self_Energy!(Workspace, Lam)
 
-    println("pre sumA:", sum(Workspace.X.a))
     @time "getXBubble! $tag" getXBubble!(Workspace, Lam,compute_intensive)
-    #@time "getXBubble! $tag" @record 13:2:17 getXBubble!(Workspace, Lam, compute_intensive)
-
-    println("post sumA:", sum(Workspace.X.a))
 
     @time "symmetrizeBubble! $tag" symmetrizeBubble!(Workspace.X, Par)
 
