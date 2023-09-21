@@ -23,6 +23,7 @@ include("Propagators.jl")
 include("Flowequations_Dense.jl")
 include("FileIO.jl")
 include("Solver.jl")
+include("CodeGen.jl")
 export saveState,
     readState,
     readLam,

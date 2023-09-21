@@ -1,12 +1,8 @@
 
-function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam, compute_intensive) where {T}
+function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam) where {T}
 
-    println("Calling getDeriv! DEBUG: with compute_intensive ")
 
     println("Calling getDeriv!")
-    println("Size of Deriv: $(Base.summarysize(Deriv))")
-    println("Size of State: $(Base.summarysize(State))")
-    println("Size of X: $(Base.summarysize(setup[1]))")
     println("==============================================================")
 
     Npairs = setup[3].System.Npairs
@@ -19,7 +15,7 @@ function getDeriv!(Deriv, State, setup::Tuple{BubbleType,T,OneLoopParams}, Lam, 
     @time "getDFint! $tag" getDFint!(Workspace, Lam)
     @time "get_Self_Energy! $tag" get_Self_Energy!(Workspace, Lam)
 
-    @time "getXBubble! $tag" getXBubble!(Workspace, Lam,compute_intensive)
+    @time "getXBubble! $tag" getXBubble!(Workspace, Lam)
 
     @time "symmetrizeBubble! $tag" symmetrizeBubble!(Workspace.X, Par)
 
@@ -113,8 +109,7 @@ function get_Self_Energy!(Workspace::PMFRGWorkspace, Lam)
 end
 # @inline getXBubble!(Workspace::PMFRGWorkspace,Lam) = getXBubble!(Workspace,Lam,Val(Workspace.Par.System.NUnique)) 
 
-function getXBubble!(Workspace::PMFRGWorkspace, Lam, compute_intensive)
-    println("DEBUG: getXBubble! with compute_intensive")
+function getXBubble!(Workspace::PMFRGWorkspace, Lam)
     Par = Workspace.Par
     (; T, N, lenIntw, np_vec) = Par.NumericalParams
     PropsBuffers = Workspace.Buffer.Props
@@ -128,9 +123,11 @@ function getXBubble!(Workspace::PMFRGWorkspace, Lam, compute_intensive)
 		end
 		return SMatrix(BubbleProp)
 	end
-	@sync begin
+	#@sync begin #DEBUG
+	begin #DEBUG
 		for is in 1:N,it in 1:N
-			Threads.@spawn begin
+			#Threads.@spawn begin #DEBUG
+			begin #DEBUG
 				BubbleProp = take!(PropsBuffers)# get pre-allocated thread-safe buffers
 				Buffer = take!(VertexBuffers)
 				ns = np_vec[is]
@@ -143,9 +140,9 @@ function getXBubble!(Workspace::PMFRGWorkspace, Lam, compute_intensive)
 						if (ns+nt+nu)%2 == 0	# skip unphysical bosonic frequency combinations
 							continue
 						end
-						addXTilde!(Workspace,is,it,iu,nw,sprop) # add to XTilde-type bubble functions
+				 		addXTilde!(Workspace,is,it,iu,nw,sprop) # add to XTilde-type bubble functions
 						if(!Par.Options.usesymmetry || nu<=nt)
-							addX!(Workspace,is,it,iu,nw,sprop,Buffer,compute_intensive)# add to X-type bubble functions
+							addX!(Workspace,is,it,iu,nw,sprop,Buffer)# add to X-type bubble functions
 						end
 					end
 				end
@@ -179,9 +176,7 @@ function addX!(
     iu::Integer,
     nwpr::Integer,
     Props,
-    Buffer,
-    compute_intensive,
-)
+    Buffer)
     (; State, X, Par) = Workspace
     (; Va12, Vb12, Vc12, Va34, Vb34, Vc34, Vc21, Vc43) = Buffer
     (; N, np_vec) = Par.NumericalParams
@@ -204,7 +199,13 @@ function addX!(
     bufferV_!(Vc43, State.Γ.c, ns, wmw4, wmw3, invpairs, N)
     # get fields of siteSum struct as Matrices for better use of LoopVectorization
 
-    @inline compute_intensive(X.a,X.b,X.c, Va12, Vb12, Vc12, Va34, Vb34, Vc34, Vc21, Vc43, Props, is, it, iu)
+    println("---------")
+    for thing in (X.a,X.b,X.c, Va12, Vb12, Vc12, Va34, Vb34, Vc34, Vc21, Vc43, Props, is, it, iu)
+        println(typeof(thing))
+    end
+    println("---------")
+    Main.compute_intensive_addX!(X.a,X.b,X.c, Va12, Vb12, Vc12, Va34, Vb34, Vc34, Vc21, Vc43, Props, is, it, iu)
+                                        
     #S_ki = siteSum.ki
     #S_kj = siteSum.kj
     #S_xk = siteSum.xk
@@ -411,6 +412,9 @@ end
     bufferV_!(Vc21, State.Γ.c, ns, wpw2, wpw1, invpairs, N)
     bufferV_!(Vc43, State.Γ.c, ns, wmw4, wmw3, invpairs, N)
     # get fields of siteSum struct as Matrices for better use of LoopVectorization
+     
+    #Main.compute_intensive_special_addX!(X.a,X.b,X.c, Va12, Vb12, Vc12, Va34, Vb34, Vc34, Vc21, Vc43, Props, is, it, iu)
+ 
     S_ki = siteSum.ki
     S_kj = siteSum.kj
     S_m = siteSum.m

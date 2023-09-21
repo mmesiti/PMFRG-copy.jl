@@ -75,80 +75,11 @@ Allowed keyword arguments (with default values):
                                                     # See the OrdinaryDiffEq documentation for further details.
 
 """
-SolveFRG(compute_intensive, Par; kwargs...) =
-    launchPMFRG!(compute_intensive, InitializeState(Par), AllocateSetup(Par), getDeriv!; kwargs...)
+SolveFRG(Par; kwargs...) =
+    launchPMFRG!(InitializeState(Par), AllocateSetup(Par), getDeriv!; kwargs...)
 
-
-function generate_compute_intensive(system)
-    generate_compute_intensive(system.Npairs, system.Nsum, system.siteSum, system.NUnique)
-end
-
-
-"Generates programmatically the compute-intensive code from a lattice specification"
-function generate_compute_intensive(Npairs, Nsum, siteSum, NUnique)
-    S_ki = siteSum.ki
-    S_kj = siteSum.kj
-    S_xk = siteSum.xk
-    S_m = siteSum.m
-
-    exp = quote
-        function compute_intensive(a::Array{T,4},
-            b::Array{T,4},
-            c::Array{T,4},
-            Va12::Vector{T},
-            Vb12::Vector{T},
-            Vc12::Vector{T},
-            Va34::Vector{T},
-            Vb34::Vector{T},
-            Vc34::Vector{T},
-            Vc21::Vector{T},
-            Vc43::Vector{T},
-            Props::SMatrix{$NUnique,$NUnique,T},
-            is::Integer,
-            it::Integer,
-            iu::Integer) where {T}
-        end
-    end
-    # Some ugly expr-fu t
-    # o get to the list of expressions
-    # inside "compute_intensive"
-    func = exp.args[2]
-    fbody = func.args[2].args
-
-    for Rij = 1:Npairs
-        #loop over all left hand side inequivalent pairs Rij
-
-        push!(fbody, :(Xa_sum = 0.0))
-        push!(fbody, :(Xb_sum = 0.0))
-        push!(fbody, :(Xc_sum = 0.0))
-        for k_spl = 1:Nsum[Rij]
-            #loop over all Nsum summation elements defined in geometry. This inner loop is responsible for most of the computational effort!
-            ki = S_ki[k_spl, Rij]
-            kj = S_kj[k_spl, Rij]
-            m = S_m[k_spl, Rij]
-            xk = S_xk[k_spl, Rij]
-
-            push!(fbody, :(@inbounds Ptm = Props[$xk, $xk] * $m))
-
-            push!(fbody, :(@inbounds Xa_sum += (+Va12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj] * 2) * Ptm))
-
-            push!(fbody, :(@inbounds Xb_sum += (+Va12[$ki] * Vb34[$kj] + Vb12[$ki] * Va34[$kj] + Vb12[$ki] * Vb34[$kj]) * Ptm))
-
-            push!(fbody, :(@inbounds Xc_sum += (+Vc12[$ki] * Vc34[$kj] + Vc21[$ki] * Vc43[$kj]) * Ptm))
-        end
-        push!(fbody, :(@inbounds a[$Rij, is, it, iu] += Xa_sum))
-        push!(fbody, :(@inbounds b[$Rij, is, it, iu] += Xb_sum))
-        push!(fbody, :(@inbounds c[$Rij, is, it, iu] += Xc_sum))
-    end
-
-    file = open("compute-intensive.jl", "w")
-    print(file, exp)
-    close(file)
-    return exp
-end
 
 function launchPMFRG!(
-    compute_intensive,
     State,
     setup,
     Deriv!::Function;
@@ -167,7 +98,6 @@ function launchPMFRG!(
 
     Par = setup[end]
     Npairs = Par.System.Npairs
-    println("DEBUG: Generating Compute Intensive function...")
 
     tag = "tag:$Npairs"
 
@@ -228,7 +158,7 @@ function launchPMFRG!(
 
     t0 = Lam_to_t(Lam_max)
     tend = get_t_min(Lam_min)
-    Deriv_subst! = generateSubstituteDeriv(Deriv!, compute_intensive)
+    Deriv_subst! = generateSubstituteDeriv(Deriv!)
     problem = ODEProblem(Deriv_subst!, State, (t0, tend), setup)
     #Solve ODE. default arguments may be added to, or overwritten by specifying kwargs
     println("Starting solve")
@@ -254,12 +184,11 @@ function launchPMFRG!(
     return sol, saved_values
 end
 
-function generateSubstituteDeriv(getDeriv!::Function, compute_intensive)
+function generateSubstituteDeriv(getDeriv!::Function)
 
-    println("DEBUG: Passing compute intensive")
     function DerivSubs!(Deriv, State, par, t)
         Lam = t_to_Lam(t)
-        a = getDeriv!(Deriv, State, par, Lam, compute_intensive)
+        a = getDeriv!(Deriv, State, par, Lam)
         Deriv .*= Lam
         a
     end
