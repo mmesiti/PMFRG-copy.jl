@@ -75,11 +75,17 @@ Allowed keyword arguments (with default values):
                                                     # See the OrdinaryDiffEq documentation for further details.
 
 """
-SolveFRG(Par; kwargs...) =
-    launchPMFRG!(InitializeState(Par), AllocateSetup(Par), getDeriv!; kwargs...)
+SolveFRG(compute_intensive, Par; kwargs...) =
+    launchPMFRG!(compute_intensive, InitializeState(Par), AllocateSetup(Par), getDeriv!; kwargs...)
+
+
+function generate_compute_intensive(system)
+    generate_compute_intensive(system.Npairs, system.Nsum, system.siteSum, system.NUnique)
+end
+
 
 "Generates programmatically the compute-intensive code from a lattice specification"
-function generate_compute_intensive(Npairs, Nsum, siteSum)
+function generate_compute_intensive(Npairs, Nsum, siteSum, NUnique)
     S_ki = siteSum.ki
     S_kj = siteSum.kj
     S_xk = siteSum.xk
@@ -97,7 +103,7 @@ function generate_compute_intensive(Npairs, Nsum, siteSum)
             Vc34::Vector{T},
             Vc21::Vector{T},
             Vc43::Vector{T},
-            Props,
+            Props::SMatrix{$NUnique,$NUnique,T},
             is::Integer,
             it::Integer,
             iu::Integer) where {T}
@@ -142,6 +148,7 @@ function generate_compute_intensive(Npairs, Nsum, siteSum)
 end
 
 function launchPMFRG!(
+    compute_intensive,
     State,
     setup,
     Deriv!::Function;
@@ -161,9 +168,6 @@ function launchPMFRG!(
     Par = setup[end]
     Npairs = Par.System.Npairs
     println("DEBUG: Generating Compute Intensive function...")
-    compute_intensive = eval(generate_compute_intensive(Par.System.Npairs,
-        Par.System.Nsum,
-        Par.System.siteSum))
 
     tag = "tag:$Npairs"
 
