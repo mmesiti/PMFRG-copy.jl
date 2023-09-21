@@ -22,7 +22,7 @@ couplings = [J1, J2]
 
 SystemToy = getSquareLattice(NLenToy, couplings)
 @time "generate" compute_intensive_toy_expr = PMFRG.generate_compute_intensive(SystemToy)
-@time "eval" compute_intensive_toy = eval(compute_intensive_expr_toy)
+@time "eval" compute_intensive_toy = eval(compute_intensive_toy_expr)
 
 System = getSquareLattice(NLen, couplings)
 @time "generate" compute_intensive_expr = PMFRG.generate_compute_intensive(System)
