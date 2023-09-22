@@ -19,11 +19,8 @@ couplings = [J1, J2]
 
 # create a structure that contains all information about the geometry of the problem.
 
-
-
-println("Warmup done, timing real problem now.")
 System = getSquareLattice(NLen, couplings)
-@time "generate" compute_intensive_expr = PMFRG.generate_compute_intensive(System)
+@time "generate" compute_intensive_expr = PMFRG.generate_compute_intensive_addX!(System)
 @time "eval" compute_intensive = eval(compute_intensive_expr)
 function trigger_compile_compute_intensive()
     Npairs = System.Npairs
@@ -82,7 +79,6 @@ flowpath = "$tempdir/flows/" # specify path for vertex checkpoints
 println("Warmup")
 
 @time Solution, saved_values = SolveFRG(
-    compute_intensive,
     Par,
     MainFile=mainFile,
     CheckpointDirectory=flowpath,
