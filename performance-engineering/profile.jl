@@ -1,37 +1,13 @@
-#!/bin/bash
-#=
-#SBATCH --partition cpuonly
-#SBATCH --time 30
-#SBATCH --exclusive
-#SBATCH --constraint=HWPERF
-#SBATCH --nodes 1
+#!/usr/bin/env julia
+# This example comes from README.md
 
-PERF_GROUP=$1
-
-set -o nounset
-module use "$HOME/modules"
-module load julia/1.9.3
-
-srun julia --optimize=3 \
-      --threads 76 \
-      ${BASH_SOURCE[0]} \
-      "$@"
-exit
-
-=#
-
-import Pkg
-ROOT = "/home/hk-project-scs/hs2454/PMFRG/"
-Pkg.activate(ROOT * "TestProject" )
-
-using LIKWID
+using Pkg
 using SpinFRGLattices, PMFRG
 using SpinFRGLattices.SquareLattice
-using Serialization
 
-using ThreadPinning
-pinthreads(:cores)
+using Profile
 
+print("All modules loaded")
 # Number of nearest neighbor bonds
 # up to which correlations are treated in the lattice.
 # For NLen = 5, all correlations C_{ij} are zero
@@ -56,7 +32,7 @@ System = getSquareLattice(NLen, couplings)
 #create a group of all parameters to pass them to the FRG Solver
 # For further optional arguments, see documentation of 'NumericalParams'
 ParSmall = Params(
-    SystemToy,     # geometry, this is always required
+    SystemToy,        # geometry, this is always required
     OneLoop(),     # method. OneLoop() is the default
     T=0.5,         # Temperature for the simulation.
     N=10,          # Number of positive Matsubara frequencies for the four-point vertex.
@@ -74,8 +50,7 @@ Par = Params(
 
 
 
-function profile_likwid_solvefrg(group)
-    println("Profiling group $group")
+function profile_solvefrg()
 
     # specify a file name for main Output
     mainFile = "profile-playground/" * PMFRG.generateFileName(ParSmall, "_testFile")
@@ -95,19 +70,19 @@ function profile_likwid_solvefrg(group)
     rm("profile-playground/", recursive=true)
 
     mainFile = "profile-playground/" * PMFRG.generateFileName(Par, "_testFile")
-    metrics, events = @perfmon group Solution, saved_values = SolveFRG(Par,
+    @profile Solution, saved_values = SolveFRG(Par,
         MainFile=mainFile,
         CheckpointDirectory=flowpath,
         method=DP5(),
         VertexCheckpoints=[],
-        CheckPointSteps=3);
-
-    return metrics, events
+        CheckPointSteps=3)
 
 end
 
-output = Dict( (group,profile_likwid_solvefrg(group)) for group in ARGS)
-outfile = "likwid-profile.jldata"
-println("Saving all metrics data in $outfile")
-Serialization.serialize(outfile, output)
 
+function profile_and_save()
+    profile_solvefrg()
+    open("profile-threads=$(Threads.nthreads())","w") do s
+        Profile.print(IOContext(s, :displaysize => (24,500)))
+    end
+end
