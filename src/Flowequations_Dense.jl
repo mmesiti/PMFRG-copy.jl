@@ -112,6 +112,15 @@ end
 
 function getXBubble!(Workspace::PMFRGWorkspace, Lam)
     Par = Workspace.Par
+    (; N) = Par.NumericalParams
+    isrange = 1:N
+    itrange = 1:N
+    getXBubblePartition!(Workspace,Lam,isrange,itrange)
+end
+
+
+function getXBubblePartition!(Workspace::PMFRGWorkspace, Lam, isrange,itrange)
+    Par = Workspace.Par
     (; T, N, lenIntw, np_vec) = Par.NumericalParams
     PropsBuffers = Workspace.Buffer.Props
     VertexBuffers = Workspace.Buffer.Vertex
@@ -125,7 +134,7 @@ function getXBubble!(Workspace::PMFRGWorkspace, Lam)
 		return SMatrix(BubbleProp)
 	end
 	@sync begin
-		for is in 1:N,it in 1:N
+		for is in isrange,it in itrange
 			Threads.@spawn begin
 				BubbleProp = take!(PropsBuffers)# get pre-allocated thread-safe buffers
 				Buffer = take!(VertexBuffers)
@@ -133,7 +142,7 @@ function getXBubble!(Workspace::PMFRGWorkspace, Lam)
 				nt = np_vec[it]
 				# Workspace.X.a .= Buffer.Va12[begin]
 				for nw in -lenIntw:lenIntw-1 # Matsubara sum
-					sprop = getKataninProp!(BubbleProp,nw,nw+ns) 
+					sprop = getKataninProp!(BubbleProp,nw,nw+ns)
 					for iu in 1:N
 						nu = np_vec[iu]
 						if (ns+nt+nu)%2 == 0	# skip unphysical bosonic frequency combinations
@@ -150,7 +159,9 @@ function getXBubble!(Workspace::PMFRGWorkspace, Lam)
 			end
 		end
 	end
+
 end
+
 
 @inline function mixedFrequencies(ns, nt, nu, nwpr)
     nw1 = Int((ns + nt + nu - 1) / 2)
