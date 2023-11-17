@@ -9,15 +9,17 @@ function InitializeState(Par::PMFRGParams)
 
     floattype = _getFloatType(Par)
 
-    State = ArrayPartition( #Allocate Memory:
-        zeros(floattype, NUnique), # f_int 
-        zeros(floattype, NUnique, Ngamma), # gamma
-        zeros(floattype, VDims), #Va
-        zeros(floattype, VDims), #Vb
-        zeros(floattype, VDims), #Vc
-    )
+    #State = ArrayPartition( #Allocate Memory:
+    #    zeros(floattype, NUnique), # f_int
+    #    zeros(floattype, NUnique, Ngamma), # gamma
+    #    zeros(floattype, VDims), #Va
+    #    zeros(floattype, VDims), #Vb
+    #    zeros(floattype, VDims), #Vc
+    #)
 
-    Γc = State.x[5]
+    State = StateType(NUnique,Ngamma,VDims,floattype)
+
+    Γc = State.s.x[5]
     setToBareVertex!(Γc, couplings)
     return State
 end
@@ -204,9 +206,9 @@ end
 
 DefaultGroup(Par::PMFRGParams) = strd(Par.NumericalParams.T)
 
-function getObservables(::Type{Observables}, State::ArrayPartition, Lam, Par)
+function getObservables(::Type{Observables}, State::StateType, Lam, Par)
     @timeit_debug "get_observables" begin 
-    f_int, gamma, Va, Vb, Vc = State.x
+    f_int, gamma, Va, Vb, Vc = State.s.x
     chi = getChi(State, Lam, Par)
     MaxVa = maximum(abs, Va, dims = (2, 3, 4, 5))[:, 1, 1, 1]
     MaxVb = maximum(abs, Vb, dims = (2, 3, 4, 5))[:, 1, 1, 1]
@@ -215,8 +217,8 @@ function getObservables(::Type{Observables}, State::ArrayPartition, Lam, Par)
     end
 end
 
-writeOutput(State::ArrayPartition, saved_values, Lam, Par) =
-    writeOutput(State.x..., saved_values.saveval[end], Lam, Par)
+writeOutput(State::StateType, saved_values, Lam, Par) =
+    writeOutput(State.s.x..., saved_values.saveval[end], Lam, Par)
 
 function writeOutput(f_int, gamma, Va, Vb, Vc, obs, Lam, Par)
     (; usesymmetry) = Par.Options

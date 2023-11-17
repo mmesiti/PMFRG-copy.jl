@@ -132,29 +132,8 @@ end
 BareVertexType(Par::PMFRGParams) =
     BareVertexType(-convert.(_getFloatType(Par), Par.System.couplings))
 
-"""Struct containing information about the (physical) ODE State, i.e. vertices"""
-struct StateType{T}
-    f_int::Array{T,1}
-    γ::Array{T,2}
-    Γ::VertexType{T}
-end
 
-function StateType(NUnique::Int, Ngamma::Int, VDims::Tuple, type = Float64::Type)
-    return StateType(
-        zeros(type, NUnique), # fint
-        zeros(type, NUnique, Ngamma), # gamma
-        VertexType(VDims, type),
-    )
-end
-
-StateType(Par::PMFRGParams) = StateType(
-    Par.System.NUnique,
-    Par.NumericalParams.Ngamma,
-    getVDims(Par),
-    _getFloatType(Par),
-)
-
-StateType(f_int, γ, Γa, Γb, Γc) = StateType(f_int, γ, VertexType(Γa, Γb, Γc))
+include("./StateType.jl")
 
 """Struct storing information about Bubble functions, i.e. rhs derivatives of vertex flow equations."""
 struct BubbleType{T}
@@ -223,6 +202,3 @@ struct VertexBufferType{T}
 end
 VertexBufferType(type, Npairs) = VertexBufferType((zeros(type, Npairs) for _ = 1:8)...)
 ##
-RecursiveArrayTools.ArrayPartition(x::StateType) =
-    ArrayPartition(x.f_int, x.γ, x.Γ.a, x.Γ.b, x.Γ.c)
-StateType(Arr::ArrayPartition) = StateType(Arr.x...)
